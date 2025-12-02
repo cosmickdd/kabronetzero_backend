@@ -78,7 +78,7 @@ class APIKey(Document):
     meta = {
         'collection': 'api_keys',
         'indexes': [
-            {'fields': 'key_hash', 'unique': True},
+            {'fields': ['key_hash'], 'unique': True},
             'user_profile',
             'is_active',
             'created_at',
@@ -129,7 +129,7 @@ class PasswordReset(Document):
     meta = {
         'collection': 'password_resets',
         'indexes': [
-            {'fields': 'token', 'unique': True},
+            {'fields': ['token'], 'unique': True},
             'user_profile',
             'created_at',
         ],
