@@ -59,6 +59,7 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    'config.middleware.MongoDBConnectionMiddleware',
 ]
 
 ROOT_URLCONF = 'config.urls'
@@ -85,21 +86,48 @@ WSGI_APPLICATION = 'config.wsgi.application'
 MONGODB_URI = env('MONGODB_URI', default='mongodb://localhost:27017/kabro_netzero_db')
 MONGODB_DB_NAME = env('MONGODB_DB_NAME', default='kabro_netzero_db')
 
-# Disconnect existing connections and connect to MongoDB
-try:
-    disconnect()
-    connect(
-        db=MONGODB_DB_NAME,
-        host=MONGODB_URI,
-        connect=False,
-        tz_aware=True,
-        serverSelectionTimeoutMS=5000,
-    )
-except Exception as e:
-    # Gracefully handle MongoDB connection errors during startup
-    # This allows the app to start even if MongoDB is temporarily unavailable
-    print(f"Warning: Could not connect to MongoDB at startup: {e}")
-    print("The application will attempt to connect on first database access.")
+# For serverless environments, defer MongoDB connection to avoid blocking startup
+# Only initialize connection if explicitly requested (e.g., during actual app requests)
+def init_mongodb_connection():
+    """Initialize MongoDB connection - called lazily to avoid blocking serverless startup"""
+    try:
+        # Check if already connected
+        from mongoengine import get_db
+        try:
+            get_db()
+            return  # Already connected
+        except:
+            pass  # Not connected yet
+        
+        disconnect()
+        connect(
+            db=MONGODB_DB_NAME,
+            host=MONGODB_URI,
+            connect=False,
+            tz_aware=True,
+            serverSelectionTimeoutMS=5000,
+        )
+    except Exception as e:
+        print(f"Warning: Could not connect to MongoDB: {e}")
+
+# Try initial connection only if not in serverless environment
+# In Vercel/serverless, skip startup connection to avoid timeout
+import sys
+is_serverless = 'vercel' in sys.modules or os.environ.get('VERCEL') == '1'
+
+if not is_serverless:
+    try:
+        disconnect()
+        connect(
+            db=MONGODB_DB_NAME,
+            host=MONGODB_URI,
+            connect=False,
+            tz_aware=True,
+            serverSelectionTimeoutMS=5000,
+        )
+    except Exception as e:
+        print(f"Warning: Could not connect to MongoDB at startup: {e}")
+        print("The application will attempt to connect on first database access.")
 
 # Password validation
 AUTH_PASSWORD_VALIDATORS = [
