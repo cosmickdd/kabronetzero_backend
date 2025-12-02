@@ -11,7 +11,7 @@ mongoengine==0.29.1
 pymongo==4.6.0
 
 # Authentication
-djangorestframework-simplejwt==5.3.2
+djangorestframework-simplejwt==5.5.1
 
 # FastAPI (Modern async framework)
 fastapi==0.104.1
