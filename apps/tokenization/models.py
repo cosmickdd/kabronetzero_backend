@@ -39,8 +39,8 @@ class BlockchainChainChoices:
 class TokenizationJob(Document):
     """Blockchain tokenization job for credit batch"""
     
-    credit_batch = ReferenceField('registry.CreditBatch', required=True)
-    project = ReferenceField('projects.Project', required=True)
+    credit_batch = ReferenceField('apps.registry.CreditBatch', required=True)
+    project = ReferenceField('apps.projects.Project', required=True)
     
     # Blockchain details
     chain = StringField(choices=BlockchainChainChoices.CHOICES, required=True, default='POLYGON')

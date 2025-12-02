@@ -4,9 +4,9 @@ Data Intake app models - IoT, Satellite, Manual data ingestion
 
 from mongoengine import (
     Document, StringField, DecimalField, DateTimeField,
-    ReferenceField, DictField
+    ReferenceField, DictField, BooleanField
 )
-from projects.models import Project
+from apps.projects.models import Project
 from datetime import datetime
 
 

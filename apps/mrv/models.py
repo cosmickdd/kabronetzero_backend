@@ -48,7 +48,7 @@ class Anomaly(EmbeddedDocument):
 class MRVRequest(Document):
     """MRV Request submitted by project developer"""
     
-    project = ReferenceField('projects.Project', required=True)
+    project = ReferenceField('apps.projects.Project', required=True)
     requested_by_email = StringField(required=True)
     
     # Status
@@ -83,7 +83,7 @@ class MRVAssessment(Document):
     """MRV Assessment by validator"""
     
     mrv_request = ReferenceField(MRVRequest, required=True)
-    project = ReferenceField('projects.Project', required=True)
+    project = ReferenceField('apps.projects.Project', required=True)
     
     # Validator info
     validator_email = StringField(required=True)
