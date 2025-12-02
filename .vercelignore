@@ -1,0 +1,20 @@
+# Ignore documentation and deployment files
+docs/
+*.md
+.github/
+cloud-run-deployment.yaml
+cloudbuild.yaml
+deploy-cloud-run.sh
+deploy-gcp.sh
+diagnose-cloud-run.py
+setup-secrets.py
+setup-secrets.sh
+venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.env
+.venv/
+infrastructure/
+mrv/
+tokenization/

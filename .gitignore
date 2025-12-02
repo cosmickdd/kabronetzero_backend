@@ -154,7 +154,6 @@ VERCEL_ENV_SETUP.md
 
 # Vercel
 .vercel/
-.vercelignore
 
 # Testing
 .pytest_cache/
