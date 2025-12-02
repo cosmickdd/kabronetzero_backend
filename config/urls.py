@@ -4,13 +4,18 @@ api/urls.py - Main API routing
 """
 
 from django.urls import path, include
+from django.http import JsonResponse
 from rest_framework.routers import DefaultRouter
 from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 
-# Import ViewSets from respective apps
-# In a real project, these would be spread across app-specific urls.py files
+# Health check endpoint (required for Cloud Run)
+def health_check(request):
+    return JsonResponse({'status': 'healthy', 'service': 'kabro-netzero-api'})
 
 urlpatterns = [
+    # Health check (no auth required, used by Cloud Run)
+    path('health/', health_check, name='health_check'),
+    
     # JWT Authentication
     path('auth/token/', TokenObtainPairView.as_view(), name='token_obtain_pair'),
     path('auth/token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
