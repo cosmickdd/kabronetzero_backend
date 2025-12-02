@@ -1,0 +1,42 @@
+runtime: python311
+
+# Service configuration for Google Cloud Run
+service: kabro-netzero-api
+
+# Environment variables for Cloud Run
+env_variables:
+  DJANGO_SETTINGS_MODULE: "config.settings"
+  DEBUG: "False"
+  ALLOWED_HOSTS: "*.run.app,kabro-netzero.example.com"
+  SECURE_SSL_REDIRECT: "True"
+  SESSION_COOKIE_SECURE: "True"
+  CSRF_COOKIE_SECURE: "True"
+  SECURE_HSTS_SECONDS: "31536000"
+  SECURE_HSTS_INCLUDE_SUBDOMAINS: "True"
+  SECURE_HSTS_PRELOAD: "True"
+
+# Secret Manager references (set via deployment)
+env_variables_secret:
+  SECRET_KEY: "kabro-netzero-secret-key"
+  MONGODB_URI: "kabro-netzero-mongodb-uri"
+  JWT_SECRET: "kabro-netzero-jwt-secret"
+  GOOGLE_CLOUD_PROJECT: "kabro-netzero-gcp-project"
+
+# Health check configuration
+health_check:
+  path: "/health/"
+  timeout_sec: 10
+  check_interval_sec: 30
+
+# Auto-scaling configuration
+automatic_scaling:
+  min_instances: 1
+  max_instances: 10
+  target_cpu_utilization: 0.6
+  target_memory_utilization: 0.7
+
+# Timeout configuration
+timeout: 120s
+
+# VPC connector for private database access (optional)
+# vpc_connector: "projects/PROJECT_ID/locations/REGION/connectors/CONNECTOR_NAME"

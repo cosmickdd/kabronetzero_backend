@@ -1,0 +1,62 @@
+steps:
+  # Step 1: Build Docker image
+  - name: 'gcr.io/cloud-builders/docker'
+    id: 'build-image'
+    args:
+      - 'build'
+      - '-t'
+      - 'gcr.io/$PROJECT_ID/kabro-netzero-api:$COMMIT_SHA'
+      - '-t'
+      - 'gcr.io/$PROJECT_ID/kabro-netzero-api:latest'
+      - '-f'
+      - 'infrastructure/Dockerfile'
+      - '.'
+
+  # Step 2: Push image to Artifact Registry
+  - name: 'gcr.io/cloud-builders/docker'
+    id: 'push-image'
+    args:
+      - 'push'
+      - 'gcr.io/$PROJECT_ID/kabro-netzero-api:$COMMIT_SHA'
+
+  # Step 3: Deploy to Cloud Run
+  - name: 'gcr.io/cloud-builders/gke-deploy'
+    args:
+      - 'run'
+      - '--filename=.'
+      - '--image=gcr.io/$PROJECT_ID/kabro-netzero-api:$COMMIT_SHA'
+      - '--location=us-central1'
+      - '--config=cloud-run-deployment.yaml'
+
+  # Step 4: Run tests in deployed container
+  - name: 'gcr.io/cloud-builders/docker'
+    id: 'run-tests'
+    args:
+      - 'run'
+      - '--rm'
+      - 'gcr.io/$PROJECT_ID/kabro-netzero-api:$COMMIT_SHA'
+      - 'pytest'
+      - 'tests/'
+      - '-v'
+
+# Images to push to Container Registry
+images:
+  - 'gcr.io/$PROJECT_ID/kabro-netzero-api:$COMMIT_SHA'
+  - 'gcr.io/$PROJECT_ID/kabro-netzero-api:latest'
+
+# Timeout for entire build
+timeout: '3600s'
+
+# Substitutions for dynamic variables
+substitutions:
+  _REGION: 'us-central1'
+  _SERVICE_NAME: 'kabro-netzero-api'
+  _MEMORY: '1Gi'
+  _CPU: '1'
+
+# Options
+options:
+  machineType: 'N1_HIGHCPU_8'
+  logging: CLOUD_LOGGING_ONLY
+  
+# Success/failure notifications can be configured via Cloud Build notifications
