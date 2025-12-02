@@ -9,7 +9,7 @@ pymongo==4.6.0
 
 # Authentication
 djangorestframework-simplejwt==5.5.1
-PyJWT==2.8.1
+PyJWT==2.10.1
 
 # Production
 gunicorn==21.2.0
