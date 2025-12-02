@@ -23,9 +23,22 @@ class MongoDBConnectionMiddleware:
                 init_mongodb_connection()
                 self.db_initialized = True
             except Exception as e:
-                print(f"Error initializing MongoDB in middleware: {e}")
-                # Don't block request even if connection fails
+                # Log but don't block request if connection fails
+                # App can still serve non-database endpoints
+                print(f"Warning: Error initializing MongoDB in middleware: {e}")
                 self.db_initialized = True
         
-        response = self.get_response(request)
+        try:
+            response = self.get_response(request)
+        except Exception as e:
+            # If database-related error, return 503 Service Unavailable
+            if 'mongodb' in str(e).lower() or 'database' in str(e).lower():
+                from django.http import JsonResponse
+                print(f"Database error on request: {e}")
+                return JsonResponse(
+                    {'error': 'Database service temporarily unavailable'},
+                    status=503
+                )
+            raise
+        
         return response
