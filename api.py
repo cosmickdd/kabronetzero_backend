@@ -45,12 +45,6 @@ if 'MONGODB_URI' in os.environ:
 # Import the WSGI application (which calls django.setup internally)
 from config.wsgi import application
 
-# Export as both 'app' and 'handler' for Vercel compatibility
+# Export as 'app' for Vercel WSGI compatibility
+# Vercel's Python runtime will use this as the WSGI application
 app = application
-
-# Vercel serverless function handler
-def handler(request):
-    """
-    Vercel serverless function handler that wraps the Django WSGI application
-    """
-    return application(request)
