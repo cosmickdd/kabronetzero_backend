@@ -39,13 +39,6 @@ if 'MONGODB_URI' in os.environ and os.environ['MONGODB_URI'].startswith('mongodb
         except Exception as e:
             print(f"Warning: Could not auto-escape MongoDB URI: {e}")
 
-try:
-    # Configure Django
-    django.setup()
-except Exception as e:
-    print(f"Error during Django setup: {e}")
-    import traceback
-    traceback.print_exc()
-
-# Import the WSGI application
+# Don't call django.setup() here - config.wsgi.get_wsgi_application() does it
+# Import the WSGI application (which calls django.setup internally)
 from config.wsgi import application
