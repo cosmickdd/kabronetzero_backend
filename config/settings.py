@@ -85,14 +85,20 @@ MONGODB_URI = env('MONGODB_URI', default='mongodb://localhost:27017/kabro_netzer
 MONGODB_DB_NAME = env('MONGODB_DB_NAME', default='kabro_netzero_db')
 
 # Disconnect existing connections and connect to MongoDB
-disconnect()
-connect(
-    db=MONGODB_DB_NAME,
-    host=MONGODB_URI,
-    connect=False,
-    tz_aware=True,
-    serverSelectionTimeoutMS=5000,
-)
+try:
+    disconnect()
+    connect(
+        db=MONGODB_DB_NAME,
+        host=MONGODB_URI,
+        connect=False,
+        tz_aware=True,
+        serverSelectionTimeoutMS=5000,
+    )
+except Exception as e:
+    # Gracefully handle MongoDB connection errors during startup
+    # This allows the app to start even if MongoDB is temporarily unavailable
+    print(f"Warning: Could not connect to MongoDB at startup: {e}")
+    print("The application will attempt to connect on first database access.")
 
 # Password validation
 AUTH_PASSWORD_VALIDATORS = [

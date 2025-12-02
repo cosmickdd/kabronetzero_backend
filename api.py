@@ -14,8 +14,13 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 # Set up Django settings
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'config.settings')
 
-# Configure Django
-django.setup()
+try:
+    # Configure Django
+    django.setup()
+except Exception as e:
+    print(f"Error during Django setup: {e}")
+    import traceback
+    traceback.print_exc()
 
 # Import the WSGI application
 from config.wsgi import application
