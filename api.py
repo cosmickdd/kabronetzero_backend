@@ -16,26 +16,28 @@ sys.path.insert(0, project_root)
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'config.settings')
 
 # Handle MongoDB URI escaping for Vercel
-# If MONGODB_URI is set but not properly escaped, escape it
-if 'MONGODB_URI' in os.environ and os.environ['MONGODB_URI'].startswith('mongodb+srv://'):
+# If MONGODB_URI is set, ensure credentials are properly escaped
+if 'MONGODB_URI' in os.environ:
     uri = os.environ['MONGODB_URI']
-    # Check if credentials need escaping (contains @ in password portion)
-    if '@' in uri and uri.count('@') == 1:  # Only one @ means credentials part
+    if uri.startswith(('mongodb://', 'mongodb+srv://')):
         try:
             # Split the URI into parts
-            if 'mongodb+srv://' in uri:
+            if '@' in uri:
                 scheme_and_creds = uri.split('@')[0]  # mongodb+srv://user:pass
                 host_part = uri.split('@')[1]  # host and query params
                 
-                # Extract credentials
-                creds = scheme_and_creds.replace('mongodb+srv://', '')
-                if ':' in creds:
-                    username, password = creds.split(':', 1)
-                    # Escape both username and password
-                    escaped_username = quote_plus(username)
-                    escaped_password = quote_plus(password)
-                    # Reconstruct URI
-                    os.environ['MONGODB_URI'] = f'mongodb+srv://{escaped_username}:{escaped_password}@{host_part}'
+                # Extract the scheme
+                if '://' in scheme_and_creds:
+                    scheme = scheme_and_creds.split('://')[0] + '://'
+                    creds = scheme_and_creds.split('://')[1]
+                    
+                    if ':' in creds:
+                        username, password = creds.split(':', 1)
+                        # Always re-escape to ensure proper encoding
+                        escaped_username = quote_plus(username)
+                        escaped_password = quote_plus(password)
+                        # Reconstruct URI
+                        os.environ['MONGODB_URI'] = f'{scheme}{escaped_username}:{escaped_password}@{host_part}'
         except Exception as e:
             print(f"Warning: Could not auto-escape MongoDB URI: {e}")
 
