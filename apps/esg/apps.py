@@ -1,6 +1,7 @@
 from django.apps import AppConfig
 
-class RegistryConfig(AppConfig):
+
+class EsgConfig(AppConfig):
     default_auto_field = 'django.db.models.BigAutoField'
-    name = 'apps.registry'
-    verbose_name = 'Registry'
+    name = 'apps.esg'
+    verbose_name = 'ESG'
