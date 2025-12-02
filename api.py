@@ -10,7 +10,6 @@ from urllib.parse import quote_plus
 
 # Add the project root to the Python path
 sys.path.insert(0, os.path.dirname(__file__))
-sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
 # Set up Django settings
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'config.settings')
