@@ -3,11 +3,11 @@ MRV and data intake serializers
 """
 
 from rest_framework import serializers
-from mrv.models import (
+from apps.mrv.models import (
     MRVRequest, MRVAssessment, MRVAuditLog, MRVStatusChoices,
     AssessmentDecisionChoices
 )
-from data_intake.models import (
+from apps.data_intake.models import (
     DataSource, DataPoint, DataAggregation, DataSourceTypeChoices,
     MetricTypeChoices
 )

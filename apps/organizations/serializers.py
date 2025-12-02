@@ -3,7 +3,7 @@ Organizations serializers
 """
 
 from rest_framework import serializers
-from organizations.models import (
+from apps.organizations.models import (
     Organization, OrganizationMembership, OrganizationInvitation,
     OrganizationMembershipRoleChoices, Location, OrganizationIntegration
 )

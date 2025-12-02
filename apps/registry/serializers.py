@@ -3,8 +3,8 @@ Registry and tokenization serializers
 """
 
 from rest_framework import serializers
-from registry.models import CreditBatch, CreditTransactionLog, BatchStatusChoices, CreditStatusChoices
-from tokenization.models import TokenizationJob, TokenizationStatusChoices, BlockchainChainChoices
+from apps.registry.models import CreditBatch, CreditTransactionLog, BatchStatusChoices, CreditStatusChoices
+from apps.tokenization.models import TokenizationJob, TokenizationStatusChoices, BlockchainChainChoices
 
 
 class CreditBatchSerializer(serializers.Serializer):

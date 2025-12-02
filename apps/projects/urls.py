@@ -4,7 +4,7 @@ Projects app URLs
 
 from django.urls import path
 from rest_framework.routers import DefaultRouter
-from projects.views import ProjectViewSet, CarbonCategoryViewSet, ProjectMethodologyViewSet
+from apps.projects.views import ProjectViewSet, CarbonCategoryViewSet, ProjectMethodologyViewSet
 
 router = DefaultRouter()
 router.register(r'projects', ProjectViewSet, basename='project')

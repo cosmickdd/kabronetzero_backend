@@ -3,10 +3,10 @@ Marketplace and retirement serializers
 """
 
 from rest_framework import serializers
-from marketplace.models import (
+from apps.marketplace.models import (
     Listing, Order, TradeHistory, ListingStatusChoices, OrderStatusChoices
 )
-from retirement.models import (
+from apps.retirement.models import (
     RetirementRecord, RetirementCertificate, RetirementPurposeChoices
 )
 

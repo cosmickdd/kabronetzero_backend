@@ -3,7 +3,7 @@ Tokenization app serializers
 """
 
 from rest_framework import serializers
-from tokenization.models import TokenizationJob, TokenizationEvent, TokenizationStatusChoices, BlockchainChainChoices
+from apps.tokenization.models import TokenizationJob, TokenizationEvent, TokenizationStatusChoices, BlockchainChainChoices
 
 
 class TokenizationEventSerializer(serializers.Serializer):

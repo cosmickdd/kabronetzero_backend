@@ -10,8 +10,8 @@ from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 from django.contrib.auth.models import User
 
-from accounts.serializers import RegisterSerializer, LoginSerializer, UserProfileSerializer
-from accounts.models import UserProfile
+from apps.accounts.serializers import RegisterSerializer, LoginSerializer, UserProfileSerializer
+from apps.accounts.models import UserProfile
 
 
 class RegisterViewSet(viewsets.ViewSet):

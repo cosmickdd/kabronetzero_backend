@@ -4,7 +4,7 @@ Marketplace app URLs
 
 from django.urls import path
 from rest_framework.routers import DefaultRouter
-from marketplace.views import ListingViewSet, OrderViewSet
+from apps.marketplace.views import ListingViewSet, OrderViewSet
 
 router = DefaultRouter()
 router.register(r'listings', ListingViewSet, basename='listing')

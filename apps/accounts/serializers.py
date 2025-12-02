@@ -4,7 +4,7 @@ Accounts app serializers
 
 from rest_framework import serializers
 from django.contrib.auth.models import User
-from accounts.models import UserProfile, APIKey, AuditLog
+from apps.accounts.models import UserProfile, APIKey, AuditLog
 
 
 class UserProfileSerializer(serializers.Serializer):

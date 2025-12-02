@@ -9,14 +9,14 @@ from rest_framework.permissions import IsAuthenticated
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework import filters
 
-from organizations.models import (
+from apps.organizations.models import (
     Organization, OrganizationMembership, OrganizationInvitation
 )
-from organizations.serializers import (
+from apps.organizations.serializers import (
     OrganizationSerializer, OrganizationMembershipSerializer,
     OrganizationInvitationSerializer
 )
-from api.permissions import IsOrgOwner, IsAdminUser
+from apps.api.permissions import IsOrgOwner, IsAdminUser
 
 
 class OrganizationViewSet(viewsets.ModelViewSet):

@@ -10,13 +10,13 @@ from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework import filters
 from datetime import datetime
 
-from projects.models import (
+from apps.projects.models import (
     Project, CarbonCategory, ProjectMethodology
 )
-from projects.serializers import (
+from apps.projects.serializers import (
     ProjectSerializer, CarbonCategorySerializer, ProjectMethodologySerializer
 )
-from mrv.models import MRVRequest
+from apps.mrv.models import MRVRequest
 
 
 class CarbonCategoryViewSet(viewsets.ReadOnlyModelViewSet):

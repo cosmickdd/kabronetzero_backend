@@ -3,7 +3,7 @@ Data Intake app serializers
 """
 
 from rest_framework import serializers
-from data_intake.models import DataSource, DataPoint, DataAggregation, DataSourceTypeChoices, MetricTypeChoices
+from apps.data_intake.models import DataSource, DataPoint, DataAggregation, DataSourceTypeChoices, MetricTypeChoices
 
 
 class DataSourceSerializer(serializers.Serializer):

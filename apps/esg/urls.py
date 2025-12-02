@@ -4,7 +4,7 @@ ESG app URLs
 
 from django.urls import path
 from rest_framework.routers import DefaultRouter
-from esg.views import EmissionInventoryViewSet, ESGReportViewSet
+from apps.esg.views import EmissionInventoryViewSet, ESGReportViewSet
 
 router = DefaultRouter()
 router.register(r'inventory', EmissionInventoryViewSet, basename='emission-inventory')

@@ -3,7 +3,7 @@ Projects serializers
 """
 
 from rest_framework import serializers
-from projects.models import (
+from apps.projects.models import (
     Project, CarbonCategory, ProjectMethodology, ProjectStatusChoices,
     CarbonCategoryChoices, StandardChoices
 )

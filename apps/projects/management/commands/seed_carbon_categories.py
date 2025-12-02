@@ -11,7 +11,7 @@ import django
 django.setup()
 
 # Import after Django setup
-from projects.models import CarbonCategory
+from apps.projects.models import CarbonCategory
 
 
 class Command(BaseCommand):

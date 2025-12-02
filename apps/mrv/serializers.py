@@ -3,7 +3,7 @@ MRV app serializers
 """
 
 from rest_framework import serializers
-from mrv.models import MRVRequest, MRVAssessment, MRVAuditLog, MRVStatusChoices, AssessmentDecisionChoices
+from apps.mrv.models import MRVRequest, MRVAssessment, MRVAuditLog, MRVStatusChoices, AssessmentDecisionChoices
 
 
 class MRVRequestSerializer(serializers.Serializer):
