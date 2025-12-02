@@ -87,7 +87,7 @@ class DataPoint(Document):
     meta = {
         'collection': 'data_points',
         'indexes': [
-            ('data_source', 'timestamp'),
+            {'fields': ['data_source', 'timestamp']},
             'project',
             'metric_type',
             'timestamp',
