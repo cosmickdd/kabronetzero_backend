@@ -6,7 +6,6 @@ from mongoengine import (
     Document, StringField, DecimalField, DateTimeField,
     ReferenceField, DictField, BooleanField
 )
-from apps.projects.models import Project
 from datetime import datetime
 
 
@@ -58,7 +57,7 @@ class DataSource(Document):
         ],
     }
     
-    project = ReferenceField(Project, required=True)
+    project = ReferenceField('apps.projects.Project', required=True)
     name = StringField(required=True)
     description = StringField()
     
@@ -96,7 +95,7 @@ class DataPoint(Document):
     }
     
     data_source = ReferenceField(DataSource, required=True)
-    project = ReferenceField(Project, required=True)  # Denormalized for query efficiency
+    project = ReferenceField('apps.projects.Project', required=True)  # Denormalized for query efficiency
     
     metric_type = StringField(
         choices=MetricTypeChoices.CHOICES,
@@ -135,7 +134,7 @@ class DataAggregation(Document):
         ],
     }
     
-    project = ReferenceField(Project, required=True)
+    project = ReferenceField('apps.projects.Project', required=True)
     metric_type = StringField(required=True)
     
     period = StringField(required=True)  # DAILY, WEEKLY, MONTHLY
