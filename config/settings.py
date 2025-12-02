@@ -5,6 +5,7 @@ Django settings for kabro_netzero project.
 import os
 from pathlib import Path
 from datetime import timedelta
+from urllib.parse import quote_plus
 
 import environ
 from mongoengine import connect, disconnect
