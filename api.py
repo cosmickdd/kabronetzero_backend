@@ -29,27 +29,27 @@ class handler(BaseHTTPRequestHandler):
     """
     
     def do_GET(self):
-        self.handle_request('GET')
+        self.route_to_django('GET')
     
     def do_POST(self):
-        self.handle_request('POST')
+        self.route_to_django('POST')
     
     def do_PUT(self):
-        self.handle_request('PUT')
+        self.route_to_django('PUT')
     
     def do_PATCH(self):
-        self.handle_request('PATCH')
+        self.route_to_django('PATCH')
     
     def do_DELETE(self):
-        self.handle_request('DELETE')
+        self.route_to_django('DELETE')
     
     def do_HEAD(self):
-        self.handle_request('HEAD')
+        self.route_to_django('HEAD')
     
     def do_OPTIONS(self):
-        self.handle_request('OPTIONS')
+        self.route_to_django('OPTIONS')
     
-    def handle_request(self, method):
+    def route_to_django(self, method):
         """Route request through Django WSGI app"""
         
         # Build environ
