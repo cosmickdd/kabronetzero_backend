@@ -1,12 +1,14 @@
 """
 Vercel serverless handler for Django application
+Uses http.server.BaseHTTPRequestHandler interface
 """
 
 import os
 import sys
-from io import StringIO
+from http.server import BaseHTTPRequestHandler
 import django
 from django.core.wsgi import get_wsgi_application
+from io import BytesIO
 
 # Add project root to path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -21,70 +23,95 @@ django.setup()
 wsgi_app = get_wsgi_application()
 
 
-def handler(request, context):
+class handler(BaseHTTPRequestHandler):
     """
-    Vercel serverless handler
-    Converts incoming request to WSGI environ and routes to Django
+    Vercel serverless handler extending BaseHTTPRequestHandler
     """
-    # Build the environ dict from Vercel request
-    environ = {
-        'REQUEST_METHOD': request['httpMethod'],
-        'SCRIPT_NAME': '',
-        'PATH_INFO': request['path'],
-        'QUERY_STRING': request.get('queryStringParameters', '') or '',
-        'CONTENT_TYPE': request['headers'].get('content-type', ''),
-        'CONTENT_LENGTH': request['headers'].get('content-length', ''),
-        'SERVER_NAME': request['headers'].get('host', 'vercel.app'),
-        'SERVER_PORT': '443',
-        'SERVER_PROTOCOL': 'HTTP/1.1',
-        'wsgi.version': (1, 0),
-        'wsgi.url_scheme': 'https',
-        'wsgi.input': StringIO(request.get('body', '') or ''),
-        'wsgi.errors': sys.stderr,
-        'wsgi.multithread': False,
-        'wsgi.multiprocess': True,
-        'wsgi.run_once': False,
-    }
     
-    # Add all headers to environ
-    for header, value in request['headers'].items():
-        header_key = 'HTTP_' + header.upper().replace('-', '_')
-        environ[header_key] = value
+    def do_GET(self):
+        self.handle_request('GET')
     
-    # Call the WSGI app
-    response_started = False
-    response_status = '200 OK'
-    response_headers = []
+    def do_POST(self):
+        self.handle_request('POST')
     
-    def start_response(status, headers):
-        nonlocal response_started, response_status, response_headers
-        response_started = True
-        response_status = status
-        response_headers = headers
-        return lambda data: None  # write() function (deprecated but required)
+    def do_PUT(self):
+        self.handle_request('PUT')
     
-    try:
-        response_data = wsgi_app(environ, start_response)
-        body = b''.join(response_data)
+    def do_PATCH(self):
+        self.handle_request('PATCH')
+    
+    def do_DELETE(self):
+        self.handle_request('DELETE')
+    
+    def do_HEAD(self):
+        self.handle_request('HEAD')
+    
+    def do_OPTIONS(self):
+        self.handle_request('OPTIONS')
+    
+    def handle_request(self, method):
+        """Route request through Django WSGI app"""
         
-        # Parse status code
-        status_code = int(response_status.split(' ', 1)[0])
-        
-        # Convert headers list to dict
-        headers_dict = {}
-        for header_name, header_value in response_headers:
-            headers_dict[header_name] = header_value
-        
-        return {
-            'statusCode': status_code,
-            'headers': headers_dict,
-            'body': body.decode('utf-8') if isinstance(body, bytes) else body,
-            'isBase64Encoded': False
+        # Build environ
+        environ = {
+            'REQUEST_METHOD': method,
+            'SCRIPT_NAME': '',
+            'PATH_INFO': self.path.split('?')[0],
+            'QUERY_STRING': self.path.split('?')[1] if '?' in self.path else '',
+            'CONTENT_TYPE': self.headers.get('content-type', ''),
+            'CONTENT_LENGTH': self.headers.get('content-length', ''),
+            'SERVER_NAME': self.headers.get('host', 'vercel.app'),
+            'SERVER_PORT': '443',
+            'SERVER_PROTOCOL': 'HTTP/1.1',
+            'wsgi.version': (1, 0),
+            'wsgi.url_scheme': 'https',
+            'wsgi.input': BytesIO(),
+            'wsgi.errors': sys.stderr,
+            'wsgi.multithread': False,
+            'wsgi.multiprocess': True,
+            'wsgi.run_once': False,
         }
-    except Exception as e:
-        return {
-            'statusCode': 500,
-            'headers': {'Content-Type': 'application/json'},
-            'body': f'{{"error": "Internal Server Error", "message": "{str(e)}"}}',
-            'isBase64Encoded': False
-        }
+        
+        # Add headers
+        for header, value in self.headers.items():
+            header_key = 'HTTP_' + header.upper().replace('-', '_')
+            environ[header_key] = value
+        
+        # Response tracking
+        response_status = '200 OK'
+        response_headers = []
+        
+        def start_response(status, headers):
+            nonlocal response_status, response_headers
+            response_status = status
+            response_headers = headers
+            return lambda data: None
+        
+        try:
+            # Call WSGI app
+            app_iter = wsgi_app(environ, start_response)
+            
+            # Send response
+            status_code = int(response_status.split(' ', 1)[0])
+            self.send_response(status_code)
+            
+            for header_name, header_value in response_headers:
+                self.send_header(header_name, header_value)
+            
+            self.end_headers()
+            
+            # Send body
+            for data in app_iter:
+                if data:
+                    self.wfile.write(data)
+                    
+        except Exception as e:
+            self.send_response(500)
+            self.send_header('Content-Type', 'application/json')
+            self.end_headers()
+            error_msg = f'{{"error": "Internal Server Error", "message": "{str(e)}"}}'
+            self.wfile.write(error_msg.encode('utf-8'))
+    
+    def log_message(self, format, *args):
+        """Suppress default logging"""
+        pass
