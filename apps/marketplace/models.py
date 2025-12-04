@@ -181,7 +181,7 @@ class TradeHistory(Document):
         'indexes': [
             'listing',
             'order',
-            'created_at',
+            'timestamp',
         ],
     }
     
