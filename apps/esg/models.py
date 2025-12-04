@@ -4,7 +4,8 @@ ESG models - Environmental, Social, Governance reporting
 
 from mongoengine import (
     Document, StringField, IntField, DecimalField, ReferenceField, 
-    DateTimeField, BooleanField, DictField, EmbeddedDocument, EmbeddedDocumentField
+    DateTimeField, BooleanField, DictField, EmbeddedDocument, EmbeddedDocumentField,
+    ListField
 )
 from datetime import datetime
 
