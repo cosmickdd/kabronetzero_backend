@@ -1,542 +1,567 @@
 """
-Comprehensive authentication views with multi-role support
-Endpoints:
-  - User registration (multiple types)
-  - Login/logout
-  - Profile management
-  - Organization management
-  - Admin/regulator operations
+Registration and authentication Views for multi-tenant system
+Implements 5 registration flows + login + org management
 """
 
-from rest_framework import viewsets, status
-from rest_framework.decorators import action
+from rest_framework import status, views
+from rest_framework.decorators import action, api_view, permission_classes
 from rest_framework.response import Response
-from rest_framework.permissions import IsAuthenticated, AllowAny
-from rest_framework_simplejwt.tokens import RefreshToken
-from django.contrib.auth.models import User
+from rest_framework.permissions import AllowAny, IsAuthenticated
+from rest_framework.viewsets import ViewSet
 from django.utils import timezone
-import uuid
-import secrets
-
-from apps.accounts.models import (
-    UserProfile, OrganizationMembership, PermissionDelegation,
-    PasswordReset, AuditLog, PlatformRoleChoices,
-    OrganizationRoleChoices, SpecializedRoleChoices
+from apps.accounts.models import CustomUser
+from apps.organizations.models import Organization, OrganizationMembership, OrganizationInvitation
+from apps.accounts.serializers_new import (
+    RegisterOrgOwnerSerializer, RegisterBuyerSerializer,
+    AcceptInvitationSerializer, RegisterValidatorSerializer,
+    CreateRegulatorSerializer, LoginSerializer, UserProfileResponseSerializer,
+    InviteMemberSerializer, SetOrgContextSerializer, OrganizationMembershipSerializer
 )
-from apps.accounts.serializers import (
-    RegisterSerializer, RegisterOrgOwnerSerializer, RegisterBuyerSerializer,
-    LoginSerializer, PasswordResetRequestSerializer, PasswordResetConfirmSerializer,
-    UserProfileSerializer, OrgContextSerializer, OrganizationDetailSerializer,
-    MemberInviteSerializer, AcceptInviteSerializer, ChangeMemberRoleSerializer,
-    CreateDelegationSerializer, DelegationListSerializer,
-    AdminUserListSerializer, AdminUserStatusSerializer, PromoteToRegulatorSerializer
-)
-from apps.organizations.models import Organization, OrganizationInvitation
-from apps.api.permissions import (
-    IsAdmin, IsRegulator, IsNotFrozen, IsOrganizationOwner,
-    IsOrganizationMember, CanManageMembers, CanAssignRoles
+from apps.api.permissions_new import (
+    IsOrgOwner, IsOrgOwnerOrManager, IsAdmin,
+    IsRegulatorOrAdmin
 )
 
 
-# ==================== REGISTRATION VIEWSETS ====================
 
-class RegisterViewSet(viewsets.ViewSet):
-    """User registration endpoints"""
+
+# ==================== REGISTRATION ENDPOINTS ====================
+
+class RegisterOrgOwnerView(views.APIView):
+    """
+    POST /api/v1/auth/register/org-owner/
+    Creates organization owner account
+    """
     permission_classes = [AllowAny]
     
-    @action(detail=False, methods=['post'])
-    def create(self, request):
-        """Generic user registration"""
-        serializer = RegisterSerializer(data=request.data)
-        if serializer.is_valid():
-            user = serializer.save()
-            return Response(
-                {
-                    'message': 'User registered successfully',
-                    'user_id': str(user.id),
-                    'email': user.email
-                },
-                status=status.HTTP_201_CREATED
-            )
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-    
-    @action(detail=False, methods=['post'], url_path='org-owner')
-    def create_org_owner(self, request):
-        """Register as organization owner + create org"""
+    def post(self, request):
         serializer = RegisterOrgOwnerSerializer(data=request.data)
-        if serializer.is_valid():
-            user = serializer.save()
-            return Response(
-                {
-                    'message': 'Organization owner registered successfully',
-                    'user_id': str(user.id),
-                    'email': user.email
-                },
-                status=status.HTTP_201_CREATED
-            )
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        
+        user = serializer.save()
+        
+        # Get user's membership
+        membership = OrganizationMembership.objects.filter(user=user).first()
+        
+        return Response({
+            'status': 'success',
+            'message': 'Organization owner account created successfully',
+            'user': {
+                'id': str(user.id),
+                'email': user.email,
+                'full_name': user.full_name,
+                'global_role': user.global_role,
+                'active_org_id': str(membership.organization.id) if membership else None
+            },
+            'organization': {
+                'id': str(membership.organization.id),
+                'name': membership.organization.name,
+                'type': membership.organization.type
+            } if membership else None
+        }, status=status.HTTP_201_CREATED)
+
+
+class RegisterBuyerView(views.APIView):
+    """
+    POST /api/v1/auth/register/buyer/
+    Creates buyer account with buyer organization
+    """
+    permission_classes = [AllowAny]
     
-    @action(detail=False, methods=['post'], url_path='buyer')
-    def create_buyer(self, request):
-        """Register as buyer"""
+    def post(self, request):
         serializer = RegisterBuyerSerializer(data=request.data)
-        if serializer.is_valid():
-            user = serializer.save()
-            return Response(
-                {
-                    'message': 'Buyer registered successfully',
-                    'user_id': str(user.id),
-                    'email': user.email
-                },
-                status=status.HTTP_201_CREATED
-            )
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        
+        user = serializer.save()
+        
+        # Get user's membership
+        membership = OrganizationMembership.objects.filter(user=user).first()
+        
+        return Response({
+            'status': 'success',
+            'message': 'Buyer account created successfully',
+            'user': {
+                'id': str(user.id),
+                'email': user.email,
+                'full_name': user.full_name,
+                'global_role': user.global_role,
+                'active_org_id': str(membership.organization.id) if membership else None
+            },
+            'organization': {
+                'id': str(membership.organization.id),
+                'name': membership.organization.name,
+                'type': 'buyer_org'
+            } if membership else None
+        }, status=status.HTTP_201_CREATED)
 
 
-class AuthViewSet(viewsets.ViewSet):
-    """Authentication endpoints"""
+class AcceptInvitationView(views.APIView):
+    """
+    POST /api/v1/auth/accept-invitation/
+    Accept organization invitation to join or create account
+    """
+    permission_classes = [AllowAny]
     
-    @action(detail=False, methods=['post'], permission_classes=[AllowAny])
-    def login(self, request):
-        """Email + password login"""
+    def post(self, request):
+        serializer = AcceptInvitationSerializer(data=request.data)
+        
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        
+        user = serializer.save()
+        
+        # Get user's membership to the org they just joined
+        membership = OrganizationMembership.objects.filter(user=user).latest('created_at')
+        
+        return Response({
+            'status': 'success',
+            'message': 'Invitation accepted successfully',
+            'user': {
+                'id': str(user.id),
+                'email': user.email,
+                'full_name': user.full_name,
+                'global_role': user.global_role
+            },
+            'membership': {
+                'organization_id': str(membership.organization.id),
+                'organization_name': membership.organization.name,
+                'role_in_org': membership.role_in_org,
+                'is_active': membership.is_active
+            }
+        }, status=status.HTTP_201_CREATED)
+
+
+class RegisterValidatorView(views.APIView):
+    """
+    POST /api/v1/auth/register/validator/
+    Admin-only: Create validator account
+    """
+    permission_classes = [IsAdmin]
+    
+    def post(self, request):
+        serializer = RegisterValidatorSerializer(data=request.data)
+        
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        
+        user = serializer.save()
+        
+        return Response({
+            'status': 'success',
+            'message': 'Validator account created successfully',
+            'user': {
+                'id': str(user.id),
+                'email': user.email,
+                'full_name': user.full_name,
+                'global_role': user.global_role,
+                'is_verified': user.is_verified
+            }
+        }, status=status.HTTP_201_CREATED)
+
+
+class RegisterRegulatorView(views.APIView):
+    """
+    POST /api/v1/auth/register/regulator/
+    Admin-only: Create regulator account
+    """
+    permission_classes = [IsAdmin]
+    
+    def post(self, request):
+        serializer = CreateRegulatorSerializer(data=request.data)
+        
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        
+        user = serializer.save()
+        
+        return Response({
+            'status': 'success',
+            'message': 'Regulator account created successfully',
+            'user': {
+                'id': str(user.id),
+                'email': user.email,
+                'full_name': user.full_name,
+                'global_role': user.global_role,
+                'is_verified': user.is_verified
+            }
+        }, status=status.HTTP_201_CREATED)
+
+
+# ==================== LOGIN & TOKEN ====================
+
+class LoginView(views.APIView):
+    """
+    POST /api/v1/auth/login/
+    Email + password login
+    Returns JWT with custom claims
+    """
+    permission_classes = [AllowAny]
+    
+    def post(self, request):
         serializer = LoginSerializer(data=request.data)
-        if serializer.is_valid():
-            try:
-                user = User.objects.get(email=serializer.validated_data['email'])
-                profile = UserProfile.objects.get(django_user_id=str(user.id))
-                
-                # Update last login
-                profile.last_login = timezone.now()
-                profile.save()
-                
-                # Generate JWT tokens
-                refresh = RefreshToken.for_user(user)
-                
-                return Response(
-                    {
-                        'access': str(refresh.access_token),
-                        'refresh': str(refresh),
-                        'user': UserProfileSerializer(profile).data
-                    },
-                    status=status.HTTP_200_OK
-                )
-            except (User.DoesNotExist, UserProfile.DoesNotExist):
-                return Response(
-                    {'error': 'Invalid credentials'},
-                    status=status.HTTP_401_UNAUTHORIZED
-                )
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-    
-    @action(detail=False, methods=['post'], permission_classes=[IsAuthenticated])
-    def logout(self, request):
-        """Logout - blacklist refresh token"""
-        # In production, add refresh token to blacklist
-        return Response(
-            {'message': 'Logged out successfully'},
-            status=status.HTTP_200_OK
-        )
-    
-    @action(detail=False, methods=['post'], permission_classes=[AllowAny])
-    def password_reset_request(self, request):
-        """Request password reset"""
-        serializer = PasswordResetRequestSerializer(data=request.data)
-        if serializer.is_valid():
-            user = User.objects.get(email=serializer.validated_data['email'])
-            
-            # Create reset token
-            token = secrets.token_urlsafe(32)
-            PasswordReset.objects.create(
-                user=user,
-                token=token,
-                expires_at=timezone.now() + timezone.timedelta(hours=1)
-            )
-            
-            return Response(
-                {'message': 'Password reset link sent to email'},
-                status=status.HTTP_200_OK
-            )
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-    
-    @action(detail=False, methods=['post'], permission_classes=[AllowAny])
-    def password_reset_confirm(self, request):
-        """Confirm password reset"""
-        serializer = PasswordResetConfirmSerializer(data=request.data)
-        if serializer.is_valid():
-            reset = PasswordReset.objects.get(token=serializer.validated_data['token'])
-            user = reset.user
-            user.set_password(serializer.validated_data['password'])
-            user.save()
-            
-            # Mark reset as used
-            reset.is_used = True
-            reset.save()
-            
-            return Response(
-                {'message': 'Password reset successfully'},
-                status=status.HTTP_200_OK
-            )
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
-
-class ProfileViewSet(viewsets.ViewSet):
-    """User profile management"""
-    permission_classes = [IsAuthenticated, IsNotFrozen]
-    
-    @action(detail=False, methods=['get'])
-    def me(self, request):
-        """Get current user profile"""
-        try:
-            profile = UserProfile.objects.get(django_user_id=str(request.user.id))
-            return Response(UserProfileSerializer(profile).data)
-        except UserProfile.DoesNotExist:
-            return Response(
-                {'error': 'Profile not found'},
-                status=status.HTTP_404_NOT_FOUND
-            )
-    
-    @action(detail=False, methods=['patch'])
-    def update_me(self, request):
-        """Update current user profile"""
-        try:
-            profile = UserProfile.objects.get(django_user_id=str(request.user.id))
-            
-            # Update fields if provided
-            if 'phone_number' in request.data:
-                profile.phone_number = request.data['phone_number']
-            if 'bio' in request.data:
-                profile.bio = request.data['bio']
-            
-            profile.save()
-            
-            return Response(UserProfileSerializer(profile).data)
-        except UserProfile.DoesNotExist:
-            return Response(
-                {'error': 'Profile not found'},
-                status=status.HTTP_404_NOT_FOUND
-            )
-    
-    @action(detail=False, methods=['get'])
-    def org_context(self, request):
-        """Get current organization context"""
-        org_id = request.query_params.get('org_id')
         
-        try:
-            profile = UserProfile.objects.get(django_user_id=str(request.user.id))
-            
-            if org_id:
-                # Get specific org context
-                membership = OrganizationMembership.objects.get(
-                    user_profile=profile,
-                    organization__id=org_id,
-                    is_active=True
-                )
-            else:
-                # Get first active org context
-                membership = OrganizationMembership.objects.filter(
-                    user_profile=profile,
-                    is_active=True
-                ).first()
-            
-            if not membership:
-                return Response(
-                    {'error': 'No organization context'},
-                    status=status.HTTP_404_NOT_FOUND
-                )
-            
-            return Response(OrgContextSerializer(membership).data)
-        except UserProfile.DoesNotExist:
-            return Response(
-                {'error': 'Profile not found'},
-                status=status.HTTP_404_NOT_FOUND
-            )
-    
-    @action(detail=False, methods=['patch'])
-    def set_org_context(self, request):
-        """Change active organization context"""
-        org_id = request.data.get('organization_id')
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
         
-        try:
-            profile = UserProfile.objects.get(django_user_id=str(request.user.id))
-            org = Organization.objects.get(id=org_id)
-            
-            membership = OrganizationMembership.objects.get(
-                user_profile=profile,
-                organization=org,
-                is_active=True
-            )
-            
-            return Response(OrgContextSerializer(membership).data)
-        except (UserProfile.DoesNotExist, Organization.DoesNotExist, OrganizationMembership.DoesNotExist):
-            return Response(
-                {'error': 'Invalid organization'},
-                status=status.HTTP_404_NOT_FOUND
-            )
-
-
-# ==================== ORGANIZATION MANAGEMENT ====================
-
-class OrganizationManagementViewSet(viewsets.ViewSet):
-    """Organization member and delegation management"""
-    permission_classes = [IsAuthenticated, IsNotFrozen]
-    
-    @action(detail=False, methods=['get'])
-    def list_organizations(self, request):
-        """List organizations for current user"""
-        try:
-            profile = UserProfile.objects.get(django_user_id=str(request.user.id))
-            memberships = OrganizationMembership.objects.filter(
-                user_profile=profile,
-                is_active=True
-            )
-            
-            orgs = [
-                {
-                    'org_id': str(m.organization.id),
-                    'name': m.organization.name,
-                    'type': m.organization.type,
-                    'role': m.org_role,
-                    'specialized_roles': m.specialized_roles,
-                }
-                for m in memberships
-            ]
-            
-            return Response(orgs)
-        except UserProfile.DoesNotExist:
-            return Response(
-                {'error': 'Profile not found'},
-                status=status.HTTP_404_NOT_FOUND
-            )
-    
-    @action(detail=False, methods=['post'], url_path='invite-member')
-    def invite_member(self, request):
-        """Invite member to organization"""
-        org_id = request.data.get('organization_id')
-        serializer = MemberInviteSerializer(data=request.data)
+        data = serializer.create(serializer.validated_data)
+        user = data['user']
         
-        if serializer.is_valid():
-            try:
-                profile = UserProfile.objects.get(django_user_id=str(request.user.id))
-                org = Organization.objects.get(id=org_id)
-                
-                # Check if requester is ORG_OWNER or ORG_MANAGER
-                membership = OrganizationMembership.objects.get(
-                    user_profile=profile,
-                    organization=org,
-                    is_active=True
-                )
-                
-                if membership.org_role not in ['ORG_OWNER', 'ORG_MANAGER']:
-                    return Response(
-                        {'error': 'Only managers can invite members'},
-                        status=status.HTTP_403_FORBIDDEN
+        # Build response
+        return Response({
+            'access': data['access'],
+            'refresh': data['refresh'],
+            'user': {
+                'id': str(user.id),
+                'email': user.email,
+                'full_name': user.full_name,
+                'global_role': user.global_role,
+                'is_verified': user.is_verified,
+                'active_org_id': user.active_org_id,
+                'organizations': list(
+                    user.get_memberships().values(
+                        'organization__id',
+                        'organization__name',
+                        'organization__type',
+                        'role_in_org'
                     )
-                
-                # Create invitation
-                invitation = OrganizationInvitation.objects.create(
-                    organization=org,
-                    email=serializer.validated_data['email'],
-                    org_role=serializer.validated_data['org_role'],
-                    specialized_roles=serializer.validated_data.get('specialized_roles', []),
-                    invited_by=profile,
-                    message=serializer.validated_data.get('message', '')
                 )
-                
-                return Response(
-                    {
-                        'message': 'Invitation sent',
-                        'invitation_id': str(invitation.id)
-                    },
-                    status=status.HTTP_201_CREATED
-                )
-            except (UserProfile.DoesNotExist, Organization.DoesNotExist, OrganizationMembership.DoesNotExist) as e:
-                return Response(
-                    {'error': str(e)},
-                    status=status.HTTP_404_NOT_FOUND
-                )
-        
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-    
-    @action(detail=False, methods=['post'], url_path='accept-invite')
-    def accept_invite(self, request):
-        """Accept organization invitation"""
-        token = request.data.get('invitation_token')
-        
-        try:
-            invitation = OrganizationInvitation.objects.get(token=token)
-            profile = UserProfile.objects.get(django_user_id=str(request.user.id))
-            
-            if invitation.email != profile.email:
-                return Response(
-                    {'error': 'Invitation not for this user'},
-                    status=status.HTTP_403_FORBIDDEN
-                )
-            
-            # Create membership
-            membership = OrganizationMembership.objects.create(
-                user_profile=profile,
-                organization=invitation.organization,
-                org_role=invitation.org_role,
-                specialized_roles=invitation.specialized_roles,
-                is_active=True,
-            )
-            
-            # Mark invitation as accepted
-            invitation.is_accepted = True
-            invitation.accepted_at = timezone.now()
-            invitation.save()
-            
-            return Response(
-                {'message': 'Invitation accepted'},
-                status=status.HTTP_200_OK
-            )
-        except (OrganizationInvitation.DoesNotExist, UserProfile.DoesNotExist):
-            return Response(
-                {'error': 'Invalid invitation'},
-                status=status.HTTP_404_NOT_FOUND
-            )
-    
-    @action(detail=False, methods=['get'], url_path='delegations')
-    def list_delegations(self, request):
-        """List delegations in organization"""
-        org_id = request.query_params.get('organization_id')
-        
-        try:
-            profile = UserProfile.objects.get(django_user_id=str(request.user.id))
-            delegations = PermissionDelegation.objects.filter(
-                from_user=profile,
-                status='ACTIVE'
-            )
-            
-            serializer = DelegationListSerializer(delegations, many=True)
-            return Response(serializer.data)
-        except UserProfile.DoesNotExist:
-            return Response(
-                {'error': 'Profile not found'},
-                status=status.HTTP_404_NOT_FOUND
-            )
-    
-    @action(detail=False, methods=['post'], url_path='create-delegation')
-    def create_delegation(self, request):
-        """Create permission delegation"""
-        org_id = request.data.get('organization_id')
-        serializer = CreateDelegationSerializer(data=request.data)
-        
-        if serializer.is_valid():
-            try:
-                from_profile = UserProfile.objects.get(django_user_id=str(request.user.id))
-                to_user = User.objects.get(id=serializer.validated_data['to_user_id'])
-                to_profile = UserProfile.objects.get(django_user_id=str(to_user.id))
-                
-                delegation = PermissionDelegation.objects.create(
-                    from_user=from_profile,
-                    to_user=to_profile,
-                    permissions=serializer.validated_data['permissions'],
-                    valid_until=serializer.validated_data.get('valid_until'),
-                    status='ACTIVE'
-                )
-                
-                return Response(
-                    {
-                        'message': 'Delegation created',
-                        'delegation_id': str(delegation.id)
-                    },
-                    status=status.HTTP_201_CREATED
-                )
-            except (UserProfile.DoesNotExist, User.DoesNotExist):
-                return Response(
-                    {'error': 'User not found'},
-                    status=status.HTTP_404_NOT_FOUND
-                )
-        
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-    
-    @action(detail=False, methods=['patch'], url_path='revoke-delegation')
-    def revoke_delegation(self, request):
-        """Revoke permission delegation"""
-        delegation_id = request.data.get('delegation_id')
-        
-        try:
-            delegation = PermissionDelegation.objects.get(id=delegation_id)
-            delegation.status = 'REVOKED'
-            delegation.revoked_at = timezone.now()
-            delegation.revoked_by = UserProfile.objects.get(django_user_id=str(request.user.id))
-            delegation.save()
-            
-            return Response({'message': 'Delegation revoked'})
-        except PermissionDelegation.DoesNotExist:
-            return Response(
-                {'error': 'Delegation not found'},
-                status=status.HTTP_404_NOT_FOUND
-            )
+            }
+        }, status=status.HTTP_200_OK)
 
 
-# ==================== ADMIN OPERATIONS ====================
+# ==================== USER PROFILE ====================
 
-class AdminViewSet(viewsets.ViewSet):
-    """Admin-only operations"""
-    permission_classes = [IsAuthenticated, IsAdmin]
+class UserProfileView(views.APIView):
+    """
+    GET /api/v1/auth/me/ - Get current user profile
+    """
+    permission_classes = [IsAuthenticated]
     
-    @action(detail=False, methods=['get'])
-    def list_users(self, request):
-        """List all users (admin only)"""
-        profiles = UserProfile.objects.all()
-        serializer = AdminUserListSerializer(profiles, many=True)
-        return Response(serializer.data)
+    def get(self, request):
+        serializer = UserProfileResponseSerializer(request.user)
+        return Response(serializer.data, status=status.HTTP_200_OK)
     
-    @action(detail=False, methods=['patch'], url_path='user-status')
-    def change_user_status(self, request):
-        """Change user status (freeze/verify)"""
-        user_id = request.data.get('user_id')
-        serializer = AdminUserStatusSerializer(data=request.data)
+    def put(self, request):
+        """
+        PUT /api/v1/auth/me/ - Update user profile
+        """
+        user = request.user
         
-        if serializer.is_valid():
-            try:
-                profile = UserProfile.objects.get(id=user_id)
-                
-                if 'is_frozen' in request.data:
-                    profile.is_frozen = request.data['is_frozen']
-                    profile.freeze_reason = request.data.get('freeze_reason', '')
-                
-                if 'is_verified' in request.data:
-                    profile.is_verified = request.data['is_verified']
-                
-                profile.save()
-                
-                return Response(AdminUserListSerializer(profile).data)
-            except UserProfile.DoesNotExist:
+        # Update allowed fields
+        if 'full_name' in request.data:
+            user.full_name = request.data['full_name']
+        
+        if 'email' in request.data:
+            new_email = request.data['email']
+            if CustomUser.objects.exclude(id=user.id).filter(email=new_email).exists():
                 return Response(
-                    {'error': 'User not found'},
-                    status=status.HTTP_404_NOT_FOUND
+                    {'email': 'Email already in use'},
+                    status=status.HTTP_400_BAD_REQUEST
                 )
+            user.email = new_email
+            user.is_verified = False  # Mark as unverified until email confirmed
         
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        user.save()
+        
+        serializer = UserProfileResponseSerializer(user)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+
+# ==================== ORGANIZATION CONTEXT ====================
+
+class OrganizationListView(views.APIView):
+    """
+    GET /api/v1/auth/organizations/
+    List user's organizations
+    """
+    permission_classes = [IsAuthenticated]
     
-    @action(detail=False, methods=['post'], url_path='promote-regulator')
-    def promote_to_regulator(self, request):
-        """Promote user to REGULATOR role"""
-        user_id = request.data.get('user_id')
-        serializer = PromoteToRegulatorSerializer(data=request.data)
+    def get(self, request):
+        memberships = OrganizationMembership.objects.filter(
+            user=request.user,
+            is_active=True
+        ).select_related('organization')
         
-        if serializer.is_valid():
-            try:
-                profile = UserProfile.objects.get(id=user_id)
-                profile.platform_role = PlatformRoleChoices.REGULATOR
-                profile.save()
-                
-                # Log audit trail
-                AuditLog.objects.create(
-                    user_profile=UserProfile.objects.get(django_user_id=str(request.user.id)),
-                    action='PROMOTE_REGULATOR',
-                    resource_type='User',
-                    resource_id=str(profile.id),
-                    description=f'Promoted to REGULATOR: {serializer.validated_data["reason"]}'
-                )
-                
-                return Response({'message': 'User promoted to REGULATOR'})
-            except UserProfile.DoesNotExist:
-                return Response(
-                    {'error': 'User not found'},
-                    status=status.HTTP_404_NOT_FOUND
-                )
+        data = []
+        for membership in memberships:
+            data.append({
+                'id': str(membership.organization.id),
+                'name': membership.organization.name,
+                'type': membership.organization.type,
+                'role_in_org': membership.role_in_org,
+                'is_active': membership.is_active,
+                'created_at': membership.created_at,
+                'is_active_org': membership.organization.id == request.user.active_org_id
+            })
         
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        return Response({'organizations': data}, status=status.HTTP_200_OK)
+
+
+class OrganizationSetActiveView(views.APIView):
+    """
+    POST /api/v1/auth/organizations/set-active/
+    Switch active organization context
+    """
+    permission_classes = [IsAuthenticated]
+    
+    def post(self, request):
+        serializer = SetOrgContextSerializer(
+            data=request.data,
+            context={'user': request.user}
+        )
+        
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        
+        membership = serializer.save()
+        
+        return Response({
+            'status': 'success',
+            'active_org_id': str(membership.organization.id),
+            'organization': {
+                'id': str(membership.organization.id),
+                'name': membership.organization.name,
+                'type': membership.organization.type,
+                'role_in_org': membership.role_in_org
+            }
+        }, status=status.HTTP_200_OK)
+
+
+# ==================== ORGANIZATION MEMBER MANAGEMENT ====================
+
+class OrganizationMemberInviteView(views.APIView):
+    """
+    POST /api/v1/organizations/{org_id}/members/invite/
+    ORG_OWNER/MANAGER invites new member
+    """
+    permission_classes = [IsAuthenticated]
+    
+    def post(self, request):
+        org_id = request.headers.get('X-Org-Id') or request.query_params.get('org_id')
+        
+        if not org_id:
+            return Response(
+                {'error': 'Organization ID required (X-Org-Id header or org_id query param)'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Check permissions
+        membership = OrganizationMembership.objects.filter(
+            user=request.user,
+            organization_id=org_id,
+            role_in_org__in=['ORG_OWNER', 'ORG_MANAGER'],
+            is_active=True
+        ).first()
+        
+        if not membership:
+            return Response(
+                {'error': 'You must be ORG_OWNER or ORG_MANAGER to invite members'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
+        try:
+            organization = Organization.objects.get(id=org_id)
+        except Organization.DoesNotExist:
+            return Response(
+                {'error': 'Organization not found'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        
+        # Create invitation
+        serializer = InviteMemberSerializer(
+            data=request.data,
+            context={'organization': organization, 'user': request.user}
+        )
+        
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        
+        invitation = serializer.save()
+        
+        return Response({
+            'status': 'success',
+            'message': 'Invitation sent successfully',
+            'invitation': {
+                'token': invitation.token,
+                'email': invitation.email,
+                'role_in_org': invitation.role_in_org,
+                'expires_at': invitation.expires_at
+            }
+        }, status=status.HTTP_201_CREATED)
+
+
+class OrganizationMemberListView(views.APIView):
+    """
+    GET /api/v1/organizations/{org_id}/members/
+    List organization members
+    """
+    permission_classes = [IsAuthenticated]
+    
+    def get(self, request):
+        org_id = request.headers.get('X-Org-Id') or request.query_params.get('org_id')
+        
+        if not org_id:
+            return Response(
+                {'error': 'Organization ID required'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Check membership
+        is_member = OrganizationMembership.objects.filter(
+            user=request.user,
+            organization_id=org_id,
+            is_active=True
+        ).exists()
+        
+        if not is_member:
+            return Response(
+                {'error': 'You are not a member of this organization'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
+        members = OrganizationMembership.objects.filter(
+            organization_id=org_id,
+            is_active=True
+        ).select_related('user').values(
+            'id',
+            'user__id',
+            'user__email',
+            'user__full_name',
+            'role_in_org',
+            'created_at',
+            'is_active'
+        )
+        
+        return Response({
+            'members': list(members),
+            'total': members.count()
+        }, status=status.HTTP_200_OK)
+
+
+class OrganizationMemberRemoveView(views.APIView):
+    """
+    POST /api/v1/organizations/{org_id}/members/{member_id}/remove/
+    ORG_OWNER removes member
+    """
+    permission_classes = [IsAuthenticated]
+    
+    def post(self, request):
+        org_id = request.headers.get('X-Org-Id') or request.query_params.get('org_id')
+        member_id = request.data.get('member_id')
+        
+        if not org_id or not member_id:
+            return Response(
+                {'error': 'Organization ID and member ID required'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Check requester is ORG_OWNER
+        is_owner = OrganizationMembership.objects.filter(
+            user=request.user,
+            organization_id=org_id,
+            role_in_org='ORG_OWNER',
+            is_active=True
+        ).exists()
+        
+        if not is_owner:
+            return Response(
+                {'error': 'Only ORG_OWNER can remove members'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
+        # Get member
+        member_membership = OrganizationMembership.objects.filter(
+            id=member_id,
+            organization_id=org_id
+        ).first()
+        
+        if not member_membership:
+            return Response(
+                {'error': 'Member not found in organization'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        
+        # Don't allow removing the only ORG_OWNER
+        other_owners = OrganizationMembership.objects.filter(
+            organization_id=org_id,
+            role_in_org='ORG_OWNER',
+            is_active=True
+        ).exclude(id=member_id)
+        
+        if member_membership.role_in_org == 'ORG_OWNER' and not other_owners.exists():
+            return Response(
+                {'error': 'Cannot remove the only ORG_OWNER'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        member_membership.is_active = False
+        member_membership.save()
+        
+        return Response({
+            'status': 'success',
+            'message': 'Member removed from organization'
+        }, status=status.HTTP_200_OK)
+
+
+class OrganizationMemberRoleUpdateView(views.APIView):
+    """
+    PUT /api/v1/organizations/{org_id}/members/{member_id}/role/
+    ORG_OWNER updates member role
+    """
+    permission_classes = [IsAuthenticated]
+    
+    def put(self, request):
+        org_id = request.headers.get('X-Org-Id') or request.query_params.get('org_id')
+        member_id = request.data.get('member_id')
+        new_role = request.data.get('role_in_org')
+        
+        if not org_id or not member_id or not new_role:
+            return Response(
+                {'error': 'Organization ID, member ID, and new role required'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Check requester is ORG_OWNER
+        is_owner = OrganizationMembership.objects.filter(
+            user=request.user,
+            organization_id=org_id,
+            role_in_org='ORG_OWNER',
+            is_active=True
+        ).exists()
+        
+        if not is_owner:
+            return Response(
+                {'error': 'Only ORG_OWNER can update member roles'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
+        # Get member
+        member_membership = OrganizationMembership.objects.filter(
+            id=member_id,
+            organization_id=org_id
+        ).first()
+        
+        if not member_membership:
+            return Response(
+                {'error': 'Member not found'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        
+        # Update role
+        member_membership.role_in_org = new_role
+        member_membership.save()
+        
+        return Response({
+            'status': 'success',
+            'message': 'Member role updated',
+            'membership': {
+                'id': str(member_membership.id),
+                'user_id': str(member_membership.user.id),
+                'role_in_org': member_membership.role_in_org
+            }
+        }, status=status.HTTP_200_OK)
+

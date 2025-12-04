@@ -1,13 +1,13 @@
 """
-Registration and authentication ViewSets for multi-tenant system
+Registration and authentication Views for multi-tenant system
 Implements 5 registration flows + login + org management
 """
 
-from rest_framework import viewsets, status, serializers
-from rest_framework.decorators import action
+from rest_framework import status, views
+from rest_framework.decorators import action, api_view, permission_classes
 from rest_framework.response import Response
 from rest_framework.permissions import AllowAny, IsAuthenticated
-from rest_framework_simplejwt.views import TokenObtainPairView
+from rest_framework.viewsets import ViewSet
 from django.utils import timezone
 from apps.accounts.models import CustomUser
 from apps.organizations.models import Organization, OrganizationMembership, OrganizationInvitation
@@ -19,20 +19,20 @@ from apps.accounts.serializers_new import (
 )
 from apps.api.permissions_new import (
     IsOrgOwner, IsOrgOwnerOrManager, IsAdmin,
-    IsRegulatorOrAdmin, IsAuthenticated as IsAuthenticatedPermission
+    IsRegulatorOrAdmin
 )
 
 
 # ==================== REGISTRATION ENDPOINTS ====================
 
-class RegisterOrgOwnerView(viewsets.ViewSet):
+class RegisterOrgOwnerView(views.APIView):
     """
     POST /api/v1/auth/register/org-owner/
     Creates organization owner account
     """
     permission_classes = [AllowAny]
     
-    def create(self, request):
+    def post(self, request):
         serializer = RegisterOrgOwnerSerializer(data=request.data)
         
         if not serializer.is_valid():
@@ -61,14 +61,14 @@ class RegisterOrgOwnerView(viewsets.ViewSet):
         }, status=status.HTTP_201_CREATED)
 
 
-class RegisterBuyerView(viewsets.ViewSet):
+class RegisterBuyerView(views.APIView):
     """
     POST /api/v1/auth/register/buyer/
     Creates buyer account with buyer organization
     """
     permission_classes = [AllowAny]
     
-    def create(self, request):
+    def post(self, request):
         serializer = RegisterBuyerSerializer(data=request.data)
         
         if not serializer.is_valid():
@@ -97,14 +97,14 @@ class RegisterBuyerView(viewsets.ViewSet):
         }, status=status.HTTP_201_CREATED)
 
 
-class AcceptInvitationView(viewsets.ViewSet):
+class AcceptInvitationView(views.APIView):
     """
     POST /api/v1/auth/accept-invitation/
     Accept organization invitation to join or create account
     """
     permission_classes = [AllowAny]
     
-    def create(self, request):
+    def post(self, request):
         serializer = AcceptInvitationSerializer(data=request.data)
         
         if not serializer.is_valid():
@@ -133,14 +133,14 @@ class AcceptInvitationView(viewsets.ViewSet):
         }, status=status.HTTP_201_CREATED)
 
 
-class RegisterValidatorView(viewsets.ViewSet):
+class RegisterValidatorView(views.APIView):
     """
     POST /api/v1/auth/register/validator/
     Admin-only: Create validator account
     """
     permission_classes = [IsAdmin]
     
-    def create(self, request):
+    def post(self, request):
         serializer = RegisterValidatorSerializer(data=request.data)
         
         if not serializer.is_valid():
@@ -161,14 +161,14 @@ class RegisterValidatorView(viewsets.ViewSet):
         }, status=status.HTTP_201_CREATED)
 
 
-class RegisterRegulatorView(viewsets.ViewSet):
+class RegisterRegulatorView(views.APIView):
     """
     POST /api/v1/auth/register/regulator/
     Admin-only: Create regulator account
     """
     permission_classes = [IsAdmin]
     
-    def create(self, request):
+    def post(self, request):
         serializer = CreateRegulatorSerializer(data=request.data)
         
         if not serializer.is_valid():
@@ -191,7 +191,7 @@ class RegisterRegulatorView(viewsets.ViewSet):
 
 # ==================== LOGIN & TOKEN ====================
 
-class LoginView(viewsets.ViewSet):
+class LoginView(views.APIView):
     """
     POST /api/v1/auth/login/
     Email + password login
@@ -199,7 +199,7 @@ class LoginView(viewsets.ViewSet):
     """
     permission_classes = [AllowAny]
     
-    def create(self, request):
+    def post(self, request):
         serializer = LoginSerializer(data=request.data)
         
         if not serializer.is_valid():
@@ -233,22 +233,19 @@ class LoginView(viewsets.ViewSet):
 
 # ==================== USER PROFILE ====================
 
-class UserProfileView(viewsets.ViewSet):
+class UserProfileView(views.APIView):
     """
-    GET /api/v1/auth/me/
-    Get current user profile
+    GET /api/v1/auth/me/ - Get current user profile
     """
     permission_classes = [IsAuthenticated]
     
-    def list(self, request):
+    def get(self, request):
         serializer = UserProfileResponseSerializer(request.user)
         return Response(serializer.data, status=status.HTTP_200_OK)
     
-    @action(detail=False, methods=['put'])
-    def update_profile(self, request):
+    def put(self, request):
         """
-        PUT /api/v1/auth/me/update_profile/
-        Update user profile
+        PUT /api/v1/auth/me/ - Update user profile
         """
         user = request.user
         
@@ -274,45 +271,14 @@ class UserProfileView(viewsets.ViewSet):
 
 # ==================== ORGANIZATION CONTEXT ====================
 
-class OrganizationContextView(viewsets.ViewSet):
+class OrganizationListView(views.APIView):
     """
-    Organization context switching and membership management
+    GET /api/v1/auth/organizations/
+    List user's organizations
     """
     permission_classes = [IsAuthenticated]
     
-    @action(detail=False, methods=['post'])
-    def set_active_org(self, request):
-        """
-        POST /api/v1/auth/organizations/set-active/
-        Switch active organization context
-        """
-        serializer = SetOrgContextSerializer(
-            data=request.data,
-            context={'user': request.user}
-        )
-        
-        if not serializer.is_valid():
-            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-        
-        membership = serializer.save()
-        
-        return Response({
-            'status': 'success',
-            'active_org_id': str(membership.organization.id),
-            'organization': {
-                'id': str(membership.organization.id),
-                'name': membership.organization.name,
-                'type': membership.organization.type,
-                'role_in_org': membership.role_in_org
-            }
-        }, status=status.HTTP_200_OK)
-    
-    @action(detail=False, methods=['get'])
-    def list_organizations(self, request):
-        """
-        GET /api/v1/auth/organizations/
-        List user's organizations
-        """
+    def get(self, request):
         memberships = OrganizationMembership.objects.filter(
             user=request.user,
             is_active=True
@@ -333,20 +299,46 @@ class OrganizationContextView(viewsets.ViewSet):
         return Response({'organizations': data}, status=status.HTTP_200_OK)
 
 
-# ==================== ORGANIZATION MEMBER MANAGEMENT ====================
-
-class OrganizationMemberView(viewsets.ViewSet):
+class OrganizationSetActiveView(views.APIView):
     """
-    Manage organization members and invitations
+    POST /api/v1/auth/organizations/set-active/
+    Switch active organization context
     """
     permission_classes = [IsAuthenticated]
     
-    @action(detail=False, methods=['post'])
-    def invite_member(self, request):
-        """
-        POST /api/v1/organizations/{org_id}/members/invite/
-        ORG_OWNER/MANAGER invites new member
-        """
+    def post(self, request):
+        serializer = SetOrgContextSerializer(
+            data=request.data,
+            context={'user': request.user}
+        )
+        
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        
+        membership = serializer.save()
+        
+        return Response({
+            'status': 'success',
+            'active_org_id': str(membership.organization.id),
+            'organization': {
+                'id': str(membership.organization.id),
+                'name': membership.organization.name,
+                'type': membership.organization.type,
+                'role_in_org': membership.role_in_org
+            }
+        }, status=status.HTTP_200_OK)
+
+
+# ==================== ORGANIZATION MEMBER MANAGEMENT ====================
+
+class OrganizationMemberInviteView(views.APIView):
+    """
+    POST /api/v1/organizations/{org_id}/members/invite/
+    ORG_OWNER/MANAGER invites new member
+    """
+    permission_classes = [IsAuthenticated]
+    
+    def post(self, request):
         org_id = request.headers.get('X-Org-Id') or request.query_params.get('org_id')
         
         if not org_id:
@@ -398,13 +390,16 @@ class OrganizationMemberView(viewsets.ViewSet):
                 'expires_at': invitation.expires_at
             }
         }, status=status.HTTP_201_CREATED)
+
+
+class OrganizationMemberListView(views.APIView):
+    """
+    GET /api/v1/organizations/{org_id}/members/
+    List organization members
+    """
+    permission_classes = [IsAuthenticated]
     
-    @action(detail=False, methods=['get'])
-    def list_members(self, request):
-        """
-        GET /api/v1/organizations/{org_id}/members/
-        List organization members
-        """
+    def get(self, request):
         org_id = request.headers.get('X-Org-Id') or request.query_params.get('org_id')
         
         if not org_id:
@@ -443,13 +438,16 @@ class OrganizationMemberView(viewsets.ViewSet):
             'members': list(members),
             'total': members.count()
         }, status=status.HTTP_200_OK)
+
+
+class OrganizationMemberRemoveView(views.APIView):
+    """
+    POST /api/v1/organizations/{org_id}/members/{member_id}/remove/
+    ORG_OWNER removes member
+    """
+    permission_classes = [IsAuthenticated]
     
-    @action(detail=False, methods=['post'])
-    def remove_member(self, request):
-        """
-        POST /api/v1/organizations/{org_id}/members/{member_id}/remove/
-        ORG_OWNER removes member
-        """
+    def post(self, request):
         org_id = request.headers.get('X-Org-Id') or request.query_params.get('org_id')
         member_id = request.data.get('member_id')
         
@@ -505,13 +503,16 @@ class OrganizationMemberView(viewsets.ViewSet):
             'status': 'success',
             'message': 'Member removed from organization'
         }, status=status.HTTP_200_OK)
+
+
+class OrganizationMemberRoleUpdateView(views.APIView):
+    """
+    PUT /api/v1/organizations/{org_id}/members/{member_id}/role/
+    ORG_OWNER updates member role
+    """
+    permission_classes = [IsAuthenticated]
     
-    @action(detail=False, methods=['put'])
-    def update_member_role(self, request):
-        """
-        PUT /api/v1/organizations/{org_id}/members/{member_id}/role/
-        ORG_OWNER updates member role
-        """
+    def put(self, request):
         org_id = request.headers.get('X-Org-Id') or request.query_params.get('org_id')
         member_id = request.data.get('member_id')
         new_role = request.data.get('role_in_org')
