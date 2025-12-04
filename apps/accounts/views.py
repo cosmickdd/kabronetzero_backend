@@ -11,13 +11,13 @@ from rest_framework.viewsets import ViewSet
 from django.utils import timezone
 from apps.accounts.models import CustomUser
 from apps.organizations.models import Organization, OrganizationMembership, OrganizationInvitation
-from apps.accounts.serializers_new import (
+from apps.accounts.serializers import (
     RegisterOrgOwnerSerializer, RegisterBuyerSerializer,
     AcceptInvitationSerializer, RegisterValidatorSerializer,
     CreateRegulatorSerializer, LoginSerializer, UserProfileResponseSerializer,
     InviteMemberSerializer, SetOrgContextSerializer, OrganizationMembershipSerializer
 )
-from apps.api.permissions_new import (
+from apps.api.permissions import (
     IsOrgOwner, IsOrgOwnerOrManager, IsAdmin,
     IsRegulatorOrAdmin
 )

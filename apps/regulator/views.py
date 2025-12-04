@@ -10,7 +10,7 @@ from django.utils import timezone
 
 from apps.accounts.models import UserProfile, AuditLog
 from apps.api.permissions import IsRegulator, IsNotFrozen
-from apps.registry.models import RegistryBatch
+from apps.registry.models import CreditBatch
 from apps.mrv.models import MRVRequest
 
 
@@ -60,7 +60,7 @@ class RegulatorViewSet(viewsets.ViewSet):
         reason = request.data.get('reason', 'Regulatory action')
         
         try:
-            batch = RegistryBatch.objects.get(id=batch_id)
+            batch = CreditBatch.objects.get(id=batch_id)
             
             # Check if batch is locked
             if hasattr(batch, 'is_locked') and batch.is_locked:
@@ -82,13 +82,13 @@ class RegulatorViewSet(viewsets.ViewSet):
             AuditLog.objects.create(
                 user_profile=profile,
                 action='LOCK_BATCH',
-                resource_type='RegistryBatch',
+                resource_type='CreditBatch',
                 resource_id=str(batch.id),
                 description=f'Batch locked by regulator: {reason}'
             )
             
             return Response({'message': 'Batch locked successfully'})
-        except RegistryBatch.DoesNotExist:
+        except CreditBatch.DoesNotExist:
             return Response(
                 {'error': 'Batch not found'},
                 status=status.HTTP_404_NOT_FOUND
@@ -101,7 +101,7 @@ class RegulatorViewSet(viewsets.ViewSet):
         reason = request.data.get('reason', 'Regulatory decision')
         
         try:
-            batch = RegistryBatch.objects.get(id=batch_id)
+            batch = CreditBatch.objects.get(id=batch_id)
             
             # Check if batch is locked
             if not (hasattr(batch, 'is_locked') and batch.is_locked):
@@ -123,13 +123,13 @@ class RegulatorViewSet(viewsets.ViewSet):
             AuditLog.objects.create(
                 user_profile=profile,
                 action='UNLOCK_BATCH',
-                resource_type='RegistryBatch',
+                resource_type='CreditBatch',
                 resource_id=str(batch.id),
                 description=f'Batch unlocked by regulator: {reason}'
             )
             
             return Response({'message': 'Batch unlocked successfully'})
-        except RegistryBatch.DoesNotExist:
+        except CreditBatch.DoesNotExist:
             return Response(
                 {'error': 'Batch not found'},
                 status=status.HTTP_404_NOT_FOUND

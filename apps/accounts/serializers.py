@@ -420,3 +420,78 @@ class AdminUserStatusSerializer(serializers.Serializer):
 class PromoteToRegulatorSerializer(serializers.Serializer):
     """Admin: promote user to REGULATOR"""
     reason = serializers.CharField(required=True)
+
+
+# ==================== ADDITIONAL REGISTRATION SERIALIZERS ====================
+
+class AcceptInvitationSerializer(serializers.Serializer):
+    """Accept organization invitation"""
+    token = serializers.CharField(required=True)
+    password = serializers.CharField(write_only=True, min_length=8, required=False)
+    full_name = serializers.CharField(max_length=255, required=False)
+    
+    def create(self, validated_data):
+        # Implementation for accepting invitation
+        pass
+
+
+class RegisterValidatorSerializer(serializers.Serializer):
+    """Create validator account (admin only)"""
+    email = serializers.EmailField(required=True)
+    password = serializers.CharField(write_only=True, min_length=8, required=True)
+    full_name = serializers.CharField(max_length=255, required=True)
+    
+    def create(self, validated_data):
+        # Implementation for creating validator
+        pass
+
+
+class CreateRegulatorSerializer(serializers.Serializer):
+    """Create regulator account (admin only)"""
+    email = serializers.EmailField(required=True)
+    password = serializers.CharField(write_only=True, min_length=8, required=True)
+    full_name = serializers.CharField(max_length=255, required=True)
+    
+    def create(self, validated_data):
+        # Implementation for creating regulator
+        pass
+
+
+class UserProfileResponseSerializer(serializers.Serializer):
+    """User profile response"""
+    id = serializers.CharField()
+    email = serializers.EmailField()
+    full_name = serializers.CharField()
+    global_role = serializers.CharField()
+    is_verified = serializers.BooleanField()
+    active_org_id = serializers.CharField(allow_null=True)
+
+
+class InviteMemberSerializer(serializers.Serializer):
+    """Invite member to organization"""
+    email = serializers.EmailField(required=True)
+    role_in_org = serializers.CharField(required=True)
+    message = serializers.CharField(required=False, allow_blank=True)
+    
+    def create(self, validated_data):
+        # Implementation for inviting member
+        pass
+
+
+class SetOrgContextSerializer(serializers.Serializer):
+    """Set active organization context"""
+    organization_id = serializers.CharField(required=True)
+    
+    def create(self, validated_data):
+        # Implementation for setting org context
+        pass
+
+
+class OrganizationMembershipSerializer(serializers.Serializer):
+    """Organization membership"""
+    id = serializers.CharField()
+    user_id = serializers.CharField()
+    organization_id = serializers.CharField()
+    role_in_org = serializers.CharField()
+    is_active = serializers.BooleanField()
+

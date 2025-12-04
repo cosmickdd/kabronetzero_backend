@@ -459,3 +459,78 @@ class IsNotFrozen(permissions.BasePermission):
             return not user_profile.is_frozen
         except:
             return False
+
+
+# ==================== ORG-SCOPED PERMISSIONS ====================
+
+class IsOrgOwner(permissions.BasePermission):
+    """User is organization owner"""
+    
+    message = "Only organization owners have access."
+    
+    def has_permission(self, request, view):
+        if not request.user.is_authenticated:
+            return False
+        
+        try:
+            user = request.user
+            org_id = request.headers.get('X-Org-Id') or request.query_params.get('org_id')
+            
+            if not org_id:
+                return False
+            
+            membership = OrganizationMembership.objects.filter(
+                user=user,
+                organization_id=org_id,
+                role_in_org='ORG_OWNER',
+                is_active=True
+            ).exists()
+            
+            return membership
+        except:
+            return False
+
+
+class IsOrgOwnerOrManager(permissions.BasePermission):
+    """User is organization owner or manager"""
+    
+    message = "Only organization owners or managers have access."
+    
+    def has_permission(self, request, view):
+        if not request.user.is_authenticated:
+            return False
+        
+        try:
+            user = request.user
+            org_id = request.headers.get('X-Org-Id') or request.query_params.get('org_id')
+            
+            if not org_id:
+                return False
+            
+            membership = OrganizationMembership.objects.filter(
+                user=user,
+                organization_id=org_id,
+                role_in_org__in=['ORG_OWNER', 'ORG_MANAGER'],
+                is_active=True
+            ).exists()
+            
+            return membership
+        except:
+            return False
+
+
+class IsRegulatorOrAdmin(permissions.BasePermission):
+    """User is regulator or admin"""
+    
+    message = "Only regulators or admins have access."
+    
+    def has_permission(self, request, view):
+        if not request.user.is_authenticated:
+            return False
+        
+        try:
+            user_profile = UserProfile.objects.get(django_user_id=str(request.user.id))
+            return user_profile.platform_role in [PlatformRoleChoices.ADMIN, PlatformRoleChoices.REGULATOR]
+        except:
+            return False
+
