@@ -21,16 +21,22 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = env('SECRET_KEY', default='django-insecure-changeme')
 DEBUG = env.bool('DEBUG', default=False)
 
-# Allow all Vercel deployment URLs and configured hosts
+# Allow Vercel domains and localhost
+# In Vercel, we need to be permissive with hostnames since preview URLs change
 ALLOWED_HOSTS = env.list(
     'ALLOWED_HOSTS',
     default=[
         'localhost',
         '127.0.0.1',
-        '*.vercel.app',  # All Vercel preview and production URLs
-        'kabronetzero-backend-vn5r.vercel.app',  # Specific production domain
+        'kabronetzero-backend-vn5r.vercel.app',
+        'kabronetzero-backend-vn5r-*.vercel.app',
     ]
 )
+
+# If in Vercel production, accept all vercel.app domains
+if os.environ.get('VERCEL'):
+    # For Vercel deployments, allow all vercel.app domains
+    ALLOWED_HOSTS.append('.vercel.app')
 
 # Application definition
 INSTALLED_APPS = [
