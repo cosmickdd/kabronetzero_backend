@@ -43,7 +43,20 @@ if 'MONGODB_URI' in os.environ:
 
 # Don't call django.setup() here - config.wsgi.get_wsgi_application() does it
 # Import the WSGI application (which calls django.setup internally)
-from config.wsgi import application
+try:
+    from config.wsgi import application
+except Exception as e:
+    # If Django fails to initialize, create a simple fallback app
+    print(f"ERROR: Django initialization failed: {e}")
+    import traceback
+    traceback.print_exc()
+    
+    # Fallback WSGI app that returns error info
+    def application(environ, start_response):
+        status = '500 Internal Server Error'
+        headers = [('Content-Type', 'application/json')]
+        start_response(status, headers)
+        return [b'{"error": "Django initialization failed. Check logs and environment variables."}']
 
 # Export as 'app' for Vercel WSGI compatibility
 # Vercel's Python runtime will use this as the WSGI application

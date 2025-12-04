@@ -91,15 +91,20 @@ MONGODB_DB_NAME = env('MONGODB_DB_NAME', default='kabro_netzero_db')
 def init_mongodb_connection():
     """Initialize MongoDB connection - called lazily to avoid blocking serverless startup"""
     try:
-        # Check if already connected
-        from mongoengine import get_db
+        from mongoengine import get_db, connect, disconnect
+        
         try:
+            # Check if already connected
             get_db()
-            return  # Already connected
+            return True  # Already connected
         except:
             pass  # Not connected yet
         
-        disconnect()
+        try:
+            disconnect()
+        except:
+            pass
+        
         connect(
             db=MONGODB_DB_NAME,
             host=MONGODB_URI,
@@ -107,24 +112,22 @@ def init_mongodb_connection():
             tz_aware=True,
             serverSelectionTimeoutMS=5000,
         )
+        return True
     except Exception as e:
-        print(f"Warning: Could not connect to MongoDB: {e}")
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.warning(f"Could not connect to MongoDB: {e}")
+        return False
 
-# Try initial connection only if not in serverless environment
 # In Vercel/serverless, skip startup connection to avoid timeout
+# Always defer to first request or explicit call
 import sys
 is_serverless = 'vercel' in sys.modules or os.environ.get('VERCEL') == '1'
 
 if not is_serverless:
+    # Only try to connect at startup if NOT in serverless
     try:
-        disconnect()
-        connect(
-            db=MONGODB_DB_NAME,
-            host=MONGODB_URI,
-            connect=False,
-            tz_aware=True,
-            serverSelectionTimeoutMS=5000,
-        )
+        init_mongodb_connection()
     except Exception as e:
         print(f"Warning: Could not connect to MongoDB at startup: {e}")
         print("The application will attempt to connect on first database access.")
