@@ -64,6 +64,7 @@ INSTALLED_APPS = [
     'apps.retirement.apps.RetirementConfig',
     'apps.esg.apps.EsgConfig',
     'apps.api.apps.ApiConfig',
+    'apps.regulator.apps.RegulatorConfig',
 ]
 
 MIDDLEWARE = [
@@ -297,5 +298,5 @@ CELERY_TIMEZONE = TIME_ZONE
 # ============================================
 # CUSTOM SETTINGS
 # ============================================
-AUTH_USER_MODEL = 'auth.User'  # Using Django's built-in User for auth, MongoEngine for business data
+AUTH_USER_MODEL = 'accounts.CustomUser'  # Use our CustomUser model
 APPEND_SLASH = False

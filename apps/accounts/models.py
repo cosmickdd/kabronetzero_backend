@@ -1,12 +1,14 @@
 """
-Accounts app models - Multi-tenant, hierarchical authorization system with delegation
+Accounts app models - Multi-tenant, hierarchical authorization system
+Global CustomUser with organization-specific roles
 """
 
-from django.contrib.auth.models import User
+from django.contrib.auth.models import AbstractBaseUser, BaseUserManager, PermissionsMixin
+from django.db import models
 from mongoengine import (
     Document, StringField, EmailField, BooleanField, DateTimeField,
     ReferenceField, ListField, DictField, IntField, DecimalField,
-    EmbeddedDocument, EmbeddedDocumentField
+    EmbeddedDocument, EmbeddedDocumentField, ObjectIdField
 )
 from datetime import datetime, timedelta
 import uuid
@@ -17,13 +19,17 @@ import hashlib
 # ==================== ROLE & PERMISSION CONSTANTS ====================
 
 class PlatformRoleChoices:
-    """Platform-wide roles (global level)"""
+    """Platform-wide global roles"""
     ADMIN = 'ADMIN'
     REGULATOR = 'REGULATOR'
+    VALIDATOR = 'VALIDATOR'  # Global validator (special)
+    NORMAL_USER = 'NORMAL_USER'  # Default for all users
     
     CHOICES = [
         (ADMIN, 'Administrator'),
         (REGULATOR, 'Regulator'),
+        (VALIDATOR, 'Global MRV Validator'),
+        (NORMAL_USER, 'Normal User'),
     ]
 
 
@@ -32,11 +38,15 @@ class OrganizationRoleChoices:
     ORG_OWNER = 'ORG_OWNER'
     ORG_MANAGER = 'ORG_MANAGER'
     ORG_MEMBER = 'ORG_MEMBER'
+    DEVELOPER = 'DEVELOPER'  # Can be org role too
+    BUYER = 'BUYER'  # Can be org role too
     
     CHOICES = [
         (ORG_OWNER, 'Organization Owner'),
         (ORG_MANAGER, 'Organization Manager'),
         (ORG_MEMBER, 'Organization Member'),
+        (DEVELOPER, 'Developer'),
+        (BUYER, 'Buyer'),
     ]
 
 
@@ -227,6 +237,104 @@ ROLE_PERMISSION_MAP = {
         PermissionChoices.MANAGE_WEBHOOKS,
     ],
 }
+
+
+# ==================== CUSTOM USER MODEL ====================
+
+class CustomUserManager(BaseUserManager):
+    """Manager for CustomUser model"""
+    
+    def create_user(self, email, password=None, **extra_fields):
+        if not email:
+            raise ValueError('Email is required')
+        email = self.normalize_email(email)
+        extra_fields.setdefault('global_role', PlatformRoleChoices.NORMAL_USER)
+        extra_fields.setdefault('is_active', True)
+        
+        user = self.model(email=email, **extra_fields)
+        user.set_password(password) if password else None
+        user.save(using=self._db)
+        return user
+    
+    def create_superuser(self, email, password=None, **extra_fields):
+        extra_fields.setdefault('global_role', PlatformRoleChoices.ADMIN)
+        extra_fields.setdefault('is_staff', True)
+        extra_fields.setdefault('is_superuser', True)
+        
+        if extra_fields.get('global_role') != PlatformRoleChoices.ADMIN:
+            raise ValueError('Superuser must have ADMIN role')
+        
+        return self.create_user(email, password, **extra_fields)
+
+
+class CustomUser(AbstractBaseUser, PermissionsMixin):
+    """
+    Global CustomUser model - all users share one table
+    Platform roles (ADMIN, REGULATOR, VALIDATOR, NORMAL_USER) are global
+    Organization-specific roles live in OrganizationMembership
+    """
+    
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    email = models.EmailField(unique=True)
+    full_name = models.CharField(max_length=255, blank=True)
+    
+    # Global platform role
+    global_role = models.CharField(
+        max_length=32,
+        choices=PlatformRoleChoices.CHOICES,
+        default=PlatformRoleChoices.NORMAL_USER
+    )
+    
+    # Account status
+    is_active = models.BooleanField(default=True)
+    is_staff = models.BooleanField(default=False)  # Can access admin site
+    is_superuser = models.BooleanField(default=False)  # Full admin
+    
+    # Freeze capability
+    is_frozen = models.BooleanField(default=False)
+    freeze_reason = models.TextField(blank=True)
+    frozen_at = models.DateTimeField(null=True, blank=True)
+    
+    # Verification
+    is_verified = models.BooleanField(default=False)
+    email_verified_at = models.DateTimeField(null=True, blank=True)
+    
+    # Timestamps
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    last_login = models.DateTimeField(null=True, blank=True)
+    
+    objects = CustomUserManager()
+    
+    USERNAME_FIELD = 'email'
+    REQUIRED_FIELDS = ['full_name']
+    
+    class Meta:
+        db_table = 'auth_customuser'
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['email']),
+            models.Index(fields=['global_role']),
+            models.Index(fields=['-created_at']),
+        ]
+    
+    def __str__(self):
+        return f"{self.email} ({self.global_role})"
+    
+    def get_active_organization(self):
+        """Get user's active organization from session or first membership"""
+        # TODO: Implement active_org_id from session/JWT
+        from apps.organizations.models import OrganizationMembership
+        membership = OrganizationMembership.objects(
+            user=self,
+            is_active=True
+        ).order_by('-created_at').first()
+        return membership.organization if membership else None
+    
+    def get_memberships(self):
+        """Get all active organization memberships"""
+        from apps.organizations.models import OrganizationMembership
+        return OrganizationMembership.objects(user=self, is_active=True)
 
 
 # ==================== MODELS ====================

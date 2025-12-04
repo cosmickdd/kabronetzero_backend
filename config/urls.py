@@ -138,6 +138,9 @@ urlpatterns = [
         
         # ESG
         path('esg/', include('apps.esg.urls')),
+        
+        # Regulator
+        path('regulator/', include('apps.regulator.urls')),
     ])),
 ]
 
