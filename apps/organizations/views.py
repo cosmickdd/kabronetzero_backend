@@ -16,7 +16,7 @@ from apps.organizations.serializers import (
     OrganizationSerializer, OrganizationMembershipSerializer,
     OrganizationInvitationSerializer
 )
-from apps.api.permissions import IsOrgOwner, IsAdminUser
+from apps.api.permissions import IsOrganizationOwner, IsAdmin
 
 
 class OrganizationViewSet(viewsets.ModelViewSet):
@@ -57,7 +57,7 @@ class OrganizationViewSet(viewsets.ModelViewSet):
             role='OWNER',
         )
     
-    @action(detail=True, methods=['post'], permission_classes=[IsOrgOwner])
+    @action(detail=True, methods=['post'], permission_classes=[IsOrganizationOwner])
     def add_member(self, request, pk=None):
         """Add member to organization"""
         org = Organization.objects.get(id=pk)
@@ -107,7 +107,7 @@ class OrganizationMembershipViewSet(viewsets.ModelViewSet):
         user = self.request.user
         return OrganizationMembership.objects.filter(user_email=user.email)
     
-    @action(detail=True, methods=['post'], permission_classes=[IsOrgOwner])
+    @action(detail=True, methods=['post'], permission_classes=[IsOrganizationOwner])
     def remove_member(self, request, pk=None):
         """Remove member from organization"""
         membership = OrganizationMembership.objects.get(id=pk)
