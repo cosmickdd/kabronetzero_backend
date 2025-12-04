@@ -104,9 +104,8 @@ urlpatterns = [
     
     # API v1 namespace
     path('v1/', include([
-        # Auth endpoints
-        path('auth/register/', include('apps.accounts.urls')),
-        path('auth/login/', include('apps.accounts.urls')),
+        # Auth endpoints - include the full accounts URLs
+        path('auth/', include('apps.accounts.urls')),
         
         # Users
         path('users/', include('apps.accounts.urls')),
